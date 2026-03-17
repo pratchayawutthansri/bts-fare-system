@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// Use the current hostname so it works from both localhost and mobile
+const apiHost = window.location.hostname;
+const apiUrl = import.meta.env.VITE_API_URL || `http://${apiHost}:5000/api`;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json'
   }

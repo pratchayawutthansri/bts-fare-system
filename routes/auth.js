@@ -185,6 +185,109 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
+// =============================================
+// PUT /api/auth/profile - แก้ไขโปรไฟล์
+// =============================================
+router.put('/profile', auth, async (req, res) => {
+  try {
+    const { full_name, email, phone } = req.body;
+    const userId = req.user.id;
+
+    // Check if email is already used by another user
+    if (email) {
+      const [existing] = await pool.query(
+        'SELECT id FROM users WHERE email = ? AND id != ?',
+        [email, userId]
+      );
+      if (existing.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Email นี้ถูกใช้แล้ว'
+        });
+      }
+    }
+
+    await pool.query(
+      'UPDATE users SET full_name = ?, email = ?, phone = ? WHERE id = ?',
+      [full_name || null, email, phone || null, userId]
+    );
+
+    // Return updated user
+    const [users] = await pool.query(
+      'SELECT id, username, email, full_name, phone, avatar_url FROM users WHERE id = ?',
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'อัปเดตโปรไฟล์สำเร็จ',
+      data: users[0]
+    });
+  } catch (error) {
+    console.error('Update Profile Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในระบบ'
+    });
+  }
+});
+
+// =============================================
+// PUT /api/auth/change-password - เปลี่ยนรหัสผ่าน
+// =============================================
+router.put('/change-password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร'
+      });
+    }
+
+    // Get current user
+    const [users] = await pool.query('SELECT password FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, users[0].password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'รหัสผ่านปัจจุบันไม่ถูกต้อง'
+      });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
+
+    res.json({
+      success: true,
+      message: 'เปลี่ยนรหัสผ่านสำเร็จ'
+    });
+  } catch (error) {
+    console.error('Change Password Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในระบบ'
+    });
+  }
+});
+
 // Helper: Generate card number
 function generateCardNumber() {
   const segments = [];
